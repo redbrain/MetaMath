@@ -22,7 +22,7 @@ import io
 import torch
 import transformers
 from torch.utils.data import Dataset
-from transformers import Trainer
+from mamba_ssm.models.mixer_seq_simple import MambaLMHeadModel
 import argparse
 import json
 import random;random.seed(42)
@@ -40,10 +40,6 @@ def jload(f, mode="r"):
     return jdict
 
 IGNORE_INDEX = -100
-DEFAULT_PAD_TOKEN = "[PAD]"
-DEFAULT_EOS_TOKEN = "</s>"
-DEFAULT_BOS_TOKEN = "<s>"
-DEFAULT_UNK_TOKEN = "<unk>"
 PROMPT_DICT = {
     "prompt_input": (
         "Below is an instruction that describes a task, paired with an input that provides further context. "
@@ -59,7 +55,7 @@ PROMPT_DICT = {
 #### 28
 @dataclass
 class ModelArguments:
-    model_name_or_path: Optional[str] = field(default="facebook/opt-125m")
+    model_name_or_path: Optional[str] = field(default="state-spaces/mamba-130m")
 
 
 @dataclass
@@ -77,6 +73,19 @@ class TrainingArguments(transformers.TrainingArguments):
     )
     overwrite_output_dir: bool = field(default=True)
 
+class MambaTrainer(transformers.Trainer): # from havenhq/mamba-chat
+    def compute_loss(self, model, inputs, return_outputs=False):
+        input_ids = inputs.pop("input_ids")
+        lm_logits = model(input_ids).logits
+
+        labels = input_ids.to(lm_logits.device)
+        shift_logits = lm_logits[:, :-1, :].contiguous()
+        labels = labels[:, 1:].contiguous()
+
+        loss_fct = torch.nn.CrossEntropyLoss()
+        lm_loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), labels.view(-1))
+
+        return lm_loss
 
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
     """Collects the state dict and dump to disk."""
@@ -85,29 +94,6 @@ def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: st
         cpu_state_dict = {key: value.cpu() for key, value in state_dict.items()}
         del state_dict
         trainer._save(output_dir, state_dict=cpu_state_dict)  # noqa
-
-
-def smart_tokenizer_and_embedding_resize(
-    special_tokens_dict: Dict,
-    tokenizer: transformers.PreTrainedTokenizer,
-    model: transformers.PreTrainedModel,
-):
-    """Resize tokenizer and embedding.
-
-    Note: This is the unoptimized version that may make your embedding size not be divisible by 64.
-    """
-    num_new_tokens = tokenizer.add_special_tokens(special_tokens_dict)
-    model.resize_token_embeddings(len(tokenizer))
-
-    if num_new_tokens > 0:
-        input_embeddings = model.get_input_embeddings().weight.data
-        output_embeddings = model.get_output_embeddings().weight.data
-
-        input_embeddings_avg = input_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-        output_embeddings_avg = output_embeddings[:-num_new_tokens].mean(dim=0, keepdim=True)
-
-        input_embeddings[-num_new_tokens:] = input_embeddings_avg
-        output_embeddings[-num_new_tokens:] = output_embeddings_avg
 
 
 def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedTokenizer) -> Dict:
@@ -251,7 +237,7 @@ def train():
     model_args, data_args, training_args, remaining_args = parser.parse_args_into_dataclasses(return_remaining_strings=True)
     data_args.data_length = int(remaining_args[1])
 
-    model = transformers.AutoModelForCausalLM.from_pretrained(
+    model = MambaLMHeadModel.from_pretrained(
         model_args.model_name_or_path,
         cache_dir=training_args.cache_dir,
     )
@@ -263,23 +249,12 @@ def train():
         padding_side="right",
         use_fast=False,
     )
-    if tokenizer.pad_token is None:
-        smart_tokenizer_and_embedding_resize(
-            special_tokens_dict=dict(pad_token=DEFAULT_PAD_TOKEN),
-            tokenizer=tokenizer,
-            model=model,
-        )
-    if "llama" in model_args.model_name_or_path:
-        tokenizer.add_special_tokens(
-            {
-                "eos_token": DEFAULT_EOS_TOKEN,
-                "bos_token": DEFAULT_BOS_TOKEN,
-                "unk_token": DEFAULT_UNK_TOKEN,
-            }
-        )
+
+    tokenizer.eos_token = "<|endoftext|>"
+    tokenizer.pad_token = tokenizer.eos_token
 
     data_module = make_supervised_data_module(tokenizer=tokenizer, data_args=data_args)
-    trainer = Trainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
+    trainer = MambaTrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
     trainer.train()
     trainer.save_state()
     # if os.environ.get('LOCAL_RANK') == '0':
