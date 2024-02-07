@@ -4,7 +4,7 @@ import os
 
 
 openai.api_key = os.environ["APIKEY"]
-# openai.organization = ""
+openai.base_url = "https://openrouter.ai/api/v1"
 
 
 def create_response(prompt_input, eng='text-davinci-002', max_tokens=1024, temperature=0.0, stop="Q", timeout=20):
