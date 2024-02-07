@@ -7,31 +7,29 @@ from utils.openai_api_utils import create_response_chat, create_response
 
 
 def get_answer_from_chat_model(prompt, logger=None, eng='gpt-3.5-turbo', temperature=0.0, timeout=20, max_try=0):
-    if eng in ["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613",
-               "gpt-4", "gpt-4-0613", "gpt-4-32k", "gpt-4-32k-0613", "gpt-3.5-turbo-1106"
-               ]:
-        is_success = False
-        num_exception = 0
-        [q, prompt] = prompt.split("======")
-        while not is_success:
-            if max_try > 0 and num_exception > max_try:
-                return ""
-            try:
-                response = create_response_chat([
-                            {"role": "system", "content": "Follow the given examples and answer the question."},
-                            {"role": "user", "content": prompt},
-                        ], eng, temperature, timeout)
-                return response['choices'][0]['message']["content"].strip()
-            except Exception as e:
-                is_print_exc = num_exception % 10 == 0
-                num_exception += 1
-                sleep_time = min(num_exception, 2)
-                logger.error(f"exception, repeat question: {q}", exc_info=is_print_exc)
-                logger.info(f"exception counter: {num_exception}, sleep {sleep_time} s")
-                time.sleep(sleep_time)
-                is_success = False
-    else:
-        raise ValueError("unknown api")
+    #if eng in ["gpt-3.5-turbo", "gpt-3.5-turbo-16k", "gpt-3.5-turbo-0613", "gpt-3.5-turbo-16k-0613", "gpt-4", "gpt-4-0613", "gpt-4-32k", "gpt-4-32k-0613", "gpt-3.5-turbo-1106"]:
+    is_success = False
+    num_exception = 0
+    [q, prompt] = prompt.split("======")
+    while not is_success:
+        if max_try > 0 and num_exception > max_try:
+            return ""
+        try:
+            response = create_response_chat([
+                        {"role": "system", "content": "Follow the given examples and answer the question."},
+                        {"role": "user", "content": prompt},
+                    ], eng, temperature, timeout)
+            return response['choices'][0]['message']["content"].strip()
+        except Exception as e:
+            is_print_exc = num_exception % 10 == 0
+            num_exception += 1
+            sleep_time = min(num_exception, 2)
+            logger.error(f"exception, repeat question: {q}", exc_info=is_print_exc)
+            logger.info(f"exception counter: {num_exception}, sleep {sleep_time} s")
+            time.sleep(sleep_time)
+            is_success = False
+    #else:
+    #    raise ValueError("unknown api")
 
 
 def wrapper(idx_args, func):
