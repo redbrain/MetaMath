@@ -10,7 +10,7 @@ fraction
 tqdm
 numpy
 fire
-openai
+openai==0.28
 scipy
 jsonlines
 pandas
