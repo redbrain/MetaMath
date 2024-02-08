@@ -68,7 +68,7 @@ class ForwardReasoning():
         elif "gpt-3.5-turbo" in self.eng:
             return "gpt-3.5-turbo"
         else:
-            return self.eng
+            return self.eng.replace("/", "_")
 
     def get_prompt(self, prompt_file_name):
         prompt_file = os.path.join(PathUtils.CONFIG_HOME_PATH, prompt_file_name)
