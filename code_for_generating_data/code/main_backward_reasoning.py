@@ -93,7 +93,7 @@ class BackwardReasoning():
         elif "gpt-3.5-turbo" in self.eng:
             return "gpt-3.5-turbo"
         else:
-            return self.eng
+            return self.eng.replace("/", "_")
 
     def save_data(self):
         with open(self.save_file, 'w', encoding='utf-8') as f:
