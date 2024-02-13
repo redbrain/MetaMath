@@ -239,6 +239,7 @@ def train():
 
     model = MambaLMHeadModel.from_pretrained(
         model_args.model_name_or_path,
+        dtype=torch.float16 if training_args.fp16 else torch.float32
     )
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(
