@@ -242,9 +242,10 @@ def train():
         dtype=torch.float16 if training_args.fp16 else torch.float32
     )
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        cache_dir=training_args.cache_dir,
+    tokenizer = transformers.GPTNeoXTokenizerFast.from_pretrained(
+        "EleutherAI/gpt-neox-20b",
+        # model_args.model_name_or_path,
+        # cache_dir=training_args.cache_dir,
         model_max_length=training_args.model_max_length,
         padding_side="right",
         use_fast=False,
